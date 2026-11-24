@@ -1,0 +1,210 @@
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1a1a1a;
+  background: #f5f6f8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tabs button {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tabs button.active {
+  background: #2a3b8f;
+  color: #fff;
+  border-color: #2a3b8f;
+}
+
+.input-mode-picker {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.input-mode-picker button {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.input-mode-picker button.active {
+  color: #fff;
+  background: #2a3b8f;
+  border-color: #2a3b8f;
+}
+
+.chat-window {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 230px);
+  min-height: 320px;
+  max-height: 760px;
+}
+
+.bubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.4;
+}
+
+.bubble.assistant {
+  background: #eef0fb;
+  align-self: flex-start;
+}
+
+.bubble.user {
+  background: #2a3b8f;
+  color: #fff;
+  align-self: flex-end;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: 8px;
+  padding: 8px 0;
+  background: #f5f6f8;
+}
+
+.chat-input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.chat-input-row textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.chat-input-row button {
+  padding: 10px 18px;
+  border: none;
+  background: #2a3b8f;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.input-mode-help {
+  padding: 0 2px;
+  color: #606778;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #eee;
+}
+
+.badge.pending { background: #fff3cd; }
+.badge.approved { background: #d4edda; }
+.badge.rejected { background: #f8d7da; }
+.badge.regenerate_requested { background: #d1ecf1; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th, td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+  vertical-align: top;
+}
+
+th {
+  background: #f0f1f6;
+}
+
+.row-actions button {
+  margin-right: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+
+.review-card {
+  background: #fff;
+  border: 1px solid #e1e3e8;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.review-card h2 { margin-top: 0; font-size: 18px; }
+.review-notice { padding: 10px 12px; background: #eaf1ff; border-radius: 6px; }
+.escalation { background: #fff7e0; }
+.table-scroll { overflow-x: auto; }
+.row-actions { min-width: 200px; }
+.row-actions button { margin: 3px; }
+.requirement-edit-fields { display: grid; gap: 8px; min-width: 260px; }
+.requirement-edit-fields label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; }
+.requirement-edit-fields textarea { box-sizing: border-box; width: 100%; min-width: 0; }
+.review-criteria { margin-top: 8px; font-size: 12px; }
+.audit-list li { padding: 10px 0; border-bottom: 1px solid #e8e8e8; }
+.audit-list time, .audit-list strong, .audit-kind { display: block; margin-bottom: 4px; }
+.audit-kind { color: #606778; font-size: 12px; text-transform: uppercase; }
+.audit-list pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+textarea { max-width: 100%; min-width: 250px; }
