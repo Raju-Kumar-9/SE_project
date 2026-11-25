@@ -102,6 +102,7 @@ class PipelineState(TypedDict, total=False):
     security_privacy_findings: list[dict[str, Any]]
     risk_assessments: list[dict[str, Any]]
     sdlc_recommendation: dict[str, Any]
+    sdlc_agent_analysis: dict[str, Any] | None
     generated_documents: list[dict[str, Any]]
     validation_notes: list[str]
     escalations: list[str]

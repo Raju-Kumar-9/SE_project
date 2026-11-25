@@ -51,6 +51,7 @@ class SdlcRecommendationOut(BaseModel):
     factors_used: dict[str, Any] = Field(default_factory=dict)
     factor_coverage: dict[str, int] = Field(default_factory=dict)
     narration_source: str | None = None
+    agent_analysis: dict[str, Any] | None = None
 
     model_config = {"from_attributes": True}
 

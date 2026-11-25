@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     OPTIONAL_ANALYSIS_AGENTS_ENABLED: bool = False
     PHASE3_ENABLED: bool = True
     PHASE3_NARRATION_ENABLED: bool = False
+    SDLC_AGENT_ENABLED: bool = False
     PHASE4_ENABLED: bool = False
     PHASE4_MAX_REVIEW_ROUNDS: int = 2
     # Client-facing runs return analyzed results directly. Enable this only

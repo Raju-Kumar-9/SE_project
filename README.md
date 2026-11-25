@@ -1,185 +1,273 @@
-# Loan Origination Agentic Requirements System — Phase 0
+# Loan Origination Requirements System
 
-Multi-agent system that interviews a client about a personal/consumer loan
-origination app, extracts structured requirements, and recommends an SDLC
-model. The repo contains the Phase 0 skeleton, Phase 1 interview/extraction,
-and Phase 2 analysis agents. Feature flags keep later phases stubbed.
+An AI-assisted requirements engineering tool for a personal/consumer **loan origination system**. Stakeholders describe the project through a guided interview or a one-shot brief. The system extracts structured requirements, computes suitability scores for six SDLC methodologies, explains the scores, and generates an SRS and traceability matrix.
 
-## Implementation status
+---
 
-| Area | Status |
+## Features
+
+- **Two input modes**
+  - **Guided interview:** the system asks questions across 17 requirement areas (slots).
+  - **One-shot brief:** describe the whole project in one message and click *End description*.
+- **Agent 1: Requirement Extraction.** A QLoRA fine-tuned **Qwen3-1.7B** model converts stakeholder input into structured business, functional, security and non-functional requirements, each with a priority, acceptance criteria, source slot and confidence.
+- **Deterministic SDLC scoring.** A Python scoring engine rates the project on 9 factors and computes a suitability percentage for 6 methods: Agile, DevSecOps, Spiral, V-Model, Waterfall and Agile + DevSecOps Hybrid. The scores are transparent and reproducible.
+- **Agent 2: SDLC Analysis.** The same open base model (with the extraction adapter disabled) explains why each method received its percentage and lists trade-offs and risks. It **never changes the scores**.
+- **Fallback behavior.** If the SDLC endpoint is unavailable, Python scores remain available and the explanation is omitted. If extraction fails, the current pipeline falls back to placeholder stub requirements; check the audit log for the error.
+- **Audit trail** of every pipeline step and agent call.
+- **Document generation:** a Word-format SRS with requirements, the SDLC ranking, the factor evidence and the agent explanation.
+
+---
+
+## Architecture
+
+![Architecture Diagram](SE_diagram_1.drawio.png)
+
+**Pipeline flow for one run**
+
+1. The frontend sends the stakeholder input to the backend.
+2. The backend calls Colab `/extract` (Agent 1), which returns structured requirements.
+3. Python `score_project` computes the 9 factor ratings and the 6 SDLC percentages locally.
+4. The backend calls Colab `/sdlc` (Agent 2) with the requirements and percentages, which returns explanations and risks.
+5. `documentation_node` builds the SRS Word document.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
 |---|---|
-| LangGraph orchestration and 17-slot tracker | Implemented |
-| Phase 1 interview and requirement extraction | LLM-backed when `STUB_MODE=false` |
-| Phase 2 classification, conflict detection, clarification, compliance RAG, security/privacy, risk analysis | LLM/rule-backed when `PHASE2_ENABLED=true` |
-| Deterministic SDLC scoring | Implemented in Phase 3; optional LLM narration is off by default |
-| Documentation, validation, human approval | Phase 4 uses python-docx, risk-prioritized review, and a durable LangGraph interrupt |
-| Evaluation and reviewed training data | Phase 5 JSONL benchmark evaluator and approved-example exporter |
-| PostgreSQL persistence, audit trail, React chat/reviewer UI | Implemented |
+| Frontend | React, Vite |
+| Backend | Python, FastAPI, LangGraph, Pydantic Settings, SQLAlchemy |
+| Database | PostgreSQL + pgvector (Docker) |
+| Model | Qwen/Qwen3-1.7B, QLoRA (PEFT, bitsandbytes 4-bit) |
+| Model serving | Google Colab + FastAPI + ngrok |
+| Documents | python-docx |
 
-Phase 2 compliance uses only retrieved evidence, exposes citations and confidence, and escalates weak mappings. Keep this agent RAG-based; never fine-tune it. The clarification loop is persisted between chat requests and capped by `CLARIFICATION_MAX_ROUNDS`.
+---
 
-## Project layout
+## Project structure
+![Project Structure](SE_diagram_2.drawio.png)
+---
 
-```
-backend/
-  app/
-    main.py                 FastAPI app + routers
-    config.py                Settings (env-driven)
-    schemas.py                Pydantic request/response models
-    db/
-      models.py               SQLAlchemy models (matches locked-in requirement schema)
-      database.py              Engine/session
-    graph/
-      state.py                 Shared LangGraph state (PipelineState) + 17-slot tracker
-      graph.py                  Graph builder — wires all 13 agents
-      nodes/                    One file per agent (Phase 1/2 implemented; Phases 3 and 4 implemented)
-    retrieval/
-      vector_store.py          FastEmbed + Pgvector semantic retrieval
-    routers/
-      chat.py                   Drives one interview turn through the graph
-      requirements.py           Read requirements
-      approvals.py              Record human decisions
-  tests/
-    test_graph_smoke.py        Runs a full interview through all 13 agents, no DB/API keys needed
-  requirements.txt
-  .env.example
-frontend/
-  src/
-    App.jsx
-    components/
-      ChatInterview.jsx         Chat-style interview UI
-      ApprovalDashboard.jsx     Reviewer table (approve/reject/regenerate)
-    api.js                      Fetch wrappers for the backend
-  package.json
-  vite.config.js
-db/
-  init.sql                    Postgres + pgvector schema, auto-run by docker-compose
-docker-compose.yml             Postgres+pgvector container
+## Prerequisites
+
+- Python 3.10+
+- Node.js 18+ and npm
+- Docker Desktop
+- A Google account with Colab access. Its Google Drive must contain the trained adapter at:
+  `MyDrive/loan-origination/qwen3-1.7b-loan-requirements-lora-v2`
+- An ngrok account (free) for the auth token
+- A Hugging Face token (if the notebook asks for one)
+
+---
+
+## Setup (first time only)
+
+### 1. Backend
+
+```bash
+cd backend
+python -m venv .venv
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+# Windows Command Prompt
+.venv\Scripts\activate.bat
+# macOS / Linux
+source .venv/bin/activate
+# Git Bash on Windows
+source .venv/Scripts/activate
+
+pip install -r requirements.txt
+cp .env.example .env        # Windows: copy .env.example .env
 ```
 
-## Running it
+### 2. Frontend
 
-### 1. Database
+```bash
+cd frontend
+npm install
+```
+
+### 3. Model training (already done)
+
+The serving notebook expects the existing adapter at `MyDrive/loan-origination/qwen3-1.7b-loan-requirements-lora-v2`. **You don't need to run training again** unless the adapter is missing or you want to retrain. The checked-in training notebook's `OUTPUT_DIR` currently points to the non-v2 folder; if you retrain, change that output path or copy the new adapter into the v2 folder before serving.
+
+---
+
+## Configuration (`backend/.env`)
+
+```dotenv
+# LLM
+LLM_PROVIDER=local_finetuned
+HF_COLAB_ENDPOINT_URL=https://xxxx.ngrok-free.app   # no trailing slash; changes every Colab session
+STUB_MODE=false                                     # true = offline demo with stub data
+SDLC_AGENT_ENABLED=true                             # enables Agent 2 (/sdlc)
+
+# Pipeline phases
+PHASE2_ENABLED=false
+OPTIONAL_ANALYSIS_AGENTS_ENABLED=false
+PHASE3_ENABLED=true            # SDLC scoring
+PHASE3_NARRATION_ENABLED=false # optional legacy narration call; leave off to use Agent 2 only
+PHASE4_ENABLED=true            # SRS document generation
+COMPLIANCE_MIN_CONFIDENCE=0.55
+CLARIFICATION_MAX_ROUNDS=3
+```
+
+> Never commit `backend/.env`. Only `.env.example` is tracked.
+
+---
+
+## How to run
+
+Follow these steps **every time** you start a new session.
+
+### Step 1: Start the model server in Colab
+
+1. Open [Google Colab](https://colab.research.google.com) → **File → Upload notebook** → choose `backend/notebooks/serve_agents_colab.ipynb`.
+2. **Runtime → Change runtime type → T4 GPU → Save.**
+3. Click the 🔑 **Secrets** icon and add these, with *Notebook access* turned **on**:
+   - `NGROK_AUTH_TOKEN`: your ngrok token
+   - `HF_TOKEN`: your Hugging Face token (if used)
+4. **Runtime → Run all.** When asked, allow Google Drive access using the account that holds the adapter.
+5. Wait for the last cell to print the public ngrok URL (`https://xxxx.ngrok-free.app`).
+6. Check it by opening `<URL>/health` in a browser. You should see:
+   ```json
+   {"status":"ok","endpoints":["/extract","/sdlc"]}
+   ```
+
+**Keep the Colab tab open for the whole session.** Both agents run there.
+
+### Step 2: Update the backend config
+
+Set the Colab provider and agent flag in `backend/.env`, disable stub mode, and paste the new URL:
+
+```dotenv
+LLM_PROVIDER=local_finetuned
+STUB_MODE=false
+SDLC_AGENT_ENABLED=true
+HF_COLAB_ENDPOINT_URL=https://xxxx.ngrok-free.app
+```
+
+### Step 3: Start the database
+
+From the project root, with Docker Desktop running:
 
 ```bash
 docker compose up -d
 ```
 
-This starts Postgres with the `pgvector` extension and runs `db/init.sql`
-automatically on first boot.
-
-### 2. Backend
+### Step 4: Start the backend
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env             # defaults already point at the docker-compose DB
-uvicorn app.main:app --reload --port 8000
+# PowerShell
+.\.venv\Scripts\Activate.ps1
+# Git Bash on Windows
+source .venv/Scripts/activate
+# macOS / Linux
+source .venv/bin/activate
+uvicorn app.main:app --reload
 ```
 
-Visit `http://localhost:8000/docs` for the interactive API docs, or
-`http://localhost:8000/health` to confirm it's up.
+If the backend was already running, **restart it** (Ctrl+C, then start again) so it picks up the new URL.
 
-The default provider is the Gemini Developer API free tier. Create a key in [Google AI Studio](https://aistudio.google.com/app/apikey), put it in `GOOGLE_API_KEY` in `backend/.env`, then set `STUB_MODE=false` and restart the backend. The key stays on the backend and should never be added to frontend code or committed. Free-tier limits can change, and Google notes that free-tier content may be used to improve its products; use synthetic demo data rather than real applicant information. The shared LLM client also supports local Ollama (`LLM_PROVIDER=ollama`) if you later want to try CPU inference.
-
-Choose between **Guided interview** and **Describe it in one message** before sending the first message. Both modes continue through requirement extraction, deterministic SDLC scoring, documentation, and reviewer approval. One-shot mode leaves slots missing when the brief does not cover them; the initial requirements are still generated from the full description and should be reviewed for gaps.
-### 3. Frontend
+### Step 5: Start the frontend
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
-Visit `http://localhost:5173`. The chat UI proxies `/api/*` to the backend
-on port 8000 (see `vite.config.js`).
+Open the URL Vite prints (usually `http://localhost:5173`).
 
-### 4. Smoke test (no DB, no frontend needed)
+### Step 6: Use the app
+
+- **Guided interview:** answer the questions one by one.
+- **One-shot:** describe the whole project in one message, then click **End description**.
+
+The results show extracted requirements, SDLC suitability percentages with factor evidence, and the SDLC agent's explanation. Download the SRS and traceability matrix from the results.
+
+### When finished
+
+In Colab, disconnect and delete the runtime when finished to release its GPU resources.
+
+---
+
+## Offline / backup mode
+
+If Colab or the GPU is unavailable, the pipeline can run fully offline with stub data:
+
+```dotenv
+STUB_MODE=true
+SDLC_AGENT_ENABLED=false
+```
+
+Restart the backend after changing these.
+
+---
+
+## Running tests
 
 ```bash
 cd backend
-pip install -r requirements.txt
-OPTIONAL_ANALYSIS_AGENTS_ENABLED=true PHASE4_ENABLED=false python -m pytest tests/test_graph_smoke.py -v
+python -m pytest tests/test_llm_client.py tests/test_graph_smoke.py tests/test_sdlc_agent.py -v
+
+cd ../frontend
+npm run build
 ```
 
-This opts the smoke test into the full secondary-agent graph and disables
-the interrupt, then drives a simulated interview through all 17 slots and
-asserts the full pipeline runs and produces schema-conformant output. Good first
-thing to run after any change to `graph.py` or the node files. (The
-compliance node falls back to an empty retrieval result if Postgres isn't
-running, so this test genuinely needs no DB up.)
+The graph smoke test runs with stub data and needs no API keys.
 
-## How a session flows right now
+---
 
-1. Frontend calls `POST /api/chat` with no `session_id` → backend creates an
-   `InterviewSession` row, empty slot state.
-2. Each user message is one graph invocation. Coordinator checks
-   `interview_complete`; while slots remain, it routes to
-   `stakeholder_interaction`, which (in stub mode) fills the next targeted
-   slot with the raw message and asks the next question off a static bank.
-3. When the message that fills the *last* slot arrives, the Stakeholder
-   Interaction node refreshes `interview_complete` after applying its slot
-   updates. The default route is `requirement_extraction -> sdlc_selection -> documentation -> validation -> human_approval`. Optional secondary analysis runs only when `OPTIONAL_ANALYSIS_AGENTS_ENABLED=true`.
-4. Requirements, SDLC recommendations, and the full audit trail are
-   persisted; the response includes a `pipeline_result` block the frontend
-   uses to populate the reviewer dashboard.
-5. Reviewer approves/rejects/requests regeneration per requirement via
-   `POST /api/approvals` — this is recorded in `approval_records` and
-   reflected onto the requirement's `approval_status`.
+## SDLC scoring method
 
-## Build sequence
+For each method, the scorer computes:
 
-- **Phase 1** complete: stakeholder interview and requirement extraction.
-- **Phase 2** implemented and optional: multi-label classification, conflict detection and a durable clarification loop, semantic Pgvector compliance retrieval with citations/confidence/escalation, security/privacy analysis, and transparent risk scoring.
-- **Phase 3** implemented: deterministic weighted SDLC scores and optional score-constrained LLM narration.
-- **Phase 4** implemented: draft SRS/traceability Word files, validation, durable interrupt/resume, reviewer modification and re-review, final approved-baseline documents after all decisions, and audit UI.
-- **Phase 5** implemented: extraction precision/recall/F1, an explicitly labeled hallucination proxy, SDLC top-1/ranking metrics, and export of approved extraction/classification examples. Hand-reviewed SDLC narration labels can be added separately. Compliance mapping and citations are excluded from training data and remain RAG-based.
-
-### Phase 5 evaluation
-
-From `backend/`, create a hand-labeled benchmark and a pipeline prediction JSONL
-with matching `scenario_id` values; see `evaluation/FORMAT.md` for the row
-format and metric definitions. Then run:
-
-```bash
-python -m evaluation.evaluate --gold evaluation/gold.jsonl --predictions evaluation/predictions.jsonl --output evaluation/metrics.json
+```
+score = 100 × Σ weight × (5 − |project rating − method profile rating|) / (5 × Σ weights)
 ```
 
-The evaluator reports requirement extraction precision, recall, F1, unmatched
-prediction rate (a hallucination proxy that needs human adjudication), SDLC
-top-1 accuracy, and mean Kendall rank correlation against hand-scored model
-rankings. It requires no API key.
+| Factor | Weight |
+|---|---|
+| Requirement stability | 1.0 |
+| Regulatory criticality | 1.4 |
+| Security risk | 1.3 |
+| Complexity | 1.0 |
+| Legacy dependence | 0.8 |
+| Change frequency | 1.1 |
+| Continuous delivery need | 0.8 |
+| Testing / documentation need | 1.1 |
+| Schedule / budget pressure | 0.8 |
 
-Export fine-tuning examples from requirements that reviewers approved in
-PostgreSQL. Add narration examples only after separately reviewing their text
-and computed score inputs:
+The percentages are normalized suitability scores, not probabilities. They support decisions; they don't make them.
 
-```bash
-python -m evaluation.export_training_data --consent-session-ids evaluation/training_consent.json --output evaluation/training_data.jsonl --narration-labels evaluation/reviewed_narration.jsonl
-```
+---
 
-Provide the required `--consent-session-ids evaluation/training_consent.json`
-argument too; that file must be a JSON array of session UUID strings with
-explicit data-subject consent for model training. Reviewer approval alone is
-not training consent. The exporter creates extraction and classification
-examples only from approved requirements in those sessions, and redacts
-obvious email/long-number identifiers. Manually inspect and de-identify the
-export before use. It does not export compliance mappings, citations, or
-generated SDLC narration. Compliance remains RAG-based and must never enter
-fine-tuning.
+## Troubleshooting
 
-Populate the knowledge base only with authorized, versioned policy/regulatory material. Use `app.retrieval.vector_store.upsert_document`; FastEmbed downloads `BAAI/bge-small-en-v1.5` weights on first embedding use. The Phase 0 seed row is a placeholder without an embedding and is ignored by retrieval.
+| Problem | Fix |
+|---|---|
+| Results appear instantly with generic data | The backend is still in stub mode. Check `STUB_MODE=false` and restart the backend. |
+| Requests fail or time out | Open `<URL>/health`. If it fails, rerun the last Colab cell and update `.env` with the new URL. |
+| Colab disconnects / "usage limits" | The free GPU quota is used up. Wait, use another account with the adapter shared to it, or use offline mode. |
+| Adapter "not found" in Colab | Check that the Drive path ends in `qwen3-1.7b-loan-requirements-lora-v2` and contains `adapter_config.json`. |
+| pip dependency warnings in Colab | Usually safe to ignore if the model loads and the URL prints. |
+| SDLC explanation missing | The `/sdlc` call failed or timed out. The scores are still valid; check the backend logs. |
 
-## Known Phase 1 simplifications (intentional, not bugs)
+---
 
-- Each LLM call gets exactly one attempt and one fallback (to the
-  deterministic Phase 0 behavior) — no retry-with-backoff, no re-prompting
-  the model to fix its own malformed JSON.
-- No token/cost tracking or rate limiting around the Anthropic calls yet.
-- Requirement clarification runs after initial analysis and is capped by `CLARIFICATION_MAX_ROUNDS`.
-- Extraction confidence scores are the LLM's own self-reported number, not
-  yet calibrated or cross-checked against anything (that groundwork is part
-  of the Phase 5 evaluation harness).
+## Known limitations and future work
+
+- One-shot mode fills fewer interview slots, so some SDLC factors default to a neutral 3/5. The guided interview gives sharper scoring.
+- Occasional duplicate requirements and incomplete non-functional requirement coverage from the 1.7B model.
+- The SDLC agent currently uses the Qwen base model with the extraction adapter disabled; there is no separately fine-tuned SDLC adapter yet.
+- Planned: document upload (PDF/DOCX) as input, requirement deduplication, evaluation of SDLC explanations, and persistent model hosting instead of Colab.
+
+---
+
+## Security and data
+
+- Secrets live in Colab Secrets and `backend/.env`, never in Git.
+- LLM output is decision support, not verified policy or compliance evidence.
+- Use only de-identified, consented data for training and evaluation.

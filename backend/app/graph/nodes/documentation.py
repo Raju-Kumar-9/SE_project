@@ -113,6 +113,20 @@ def documentation_node(state: PipelineState) -> PipelineState:
             cells[1].text = str(row.get("model", ""))
             cells[2].text = f"{row.get('score_percent', round(row.get('score', 0) * 100, 1))}%"
     srs.add_paragraph(recommendation.get("narration", ""))
+    agent_analysis = state.get("sdlc_agent_analysis") or recommendation.get("agent_analysis")
+    if isinstance(agent_analysis, dict):
+        srs.add_heading("SDLC analysis agent explanation", level=2)
+        if agent_analysis.get("summary"):
+            srs.add_paragraph(agent_analysis["summary"])
+        for item in agent_analysis.get("per_method", []):
+            if isinstance(item, dict):
+                srs.add_heading(str(item.get("method", "SDLC method")), level=3)
+                srs.add_paragraph(str(item.get("explanation", "")))
+        risks = agent_analysis.get("risks", [])
+        if risks:
+            srs.add_paragraph("Risks and trade-offs:")
+            for risk in risks:
+                srs.add_paragraph(str(risk), style="List Bullet")
     if factors_used:
         srs.add_heading("Scoring factors and evidence", level=2)
         srs.add_paragraph(

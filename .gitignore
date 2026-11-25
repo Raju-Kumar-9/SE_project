@@ -2,8 +2,10 @@
 __pycache__/
 *.pyc
 venv/
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
 .env
-.env.example
 backend/generated/
 
 # Node

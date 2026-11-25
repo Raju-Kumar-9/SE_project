@@ -2,7 +2,7 @@
 from app.config import settings
 from app.graph.sdlc_scoring import score_project
 from app.graph.state import PipelineState
-from app.llm.client import call_llm_json
+from app.llm.client import call_llm_json, call_sdlc_agent
 
 
 def _deterministic_narration(ranked: list[dict], factors: dict) -> str:
@@ -29,6 +29,27 @@ def _llm_narration(ranked: list[dict], factors: dict) -> str:
     return narration.strip()
 
 
+def _validate_agent_analysis(result: dict, methods: list[str]) -> dict:
+    if not isinstance(result, dict) or not isinstance(result.get("summary"), str) or not result["summary"].strip():
+        raise ValueError("SDLC agent response must contain a non-empty summary string")
+    per_method = result.get("per_method")
+    if not isinstance(per_method, list) or any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("method"), str)
+        or not isinstance(item.get("explanation"), str)
+        or not item["method"].strip()
+        or not item["explanation"].strip()
+        for item in per_method
+    ):
+        raise ValueError("SDLC agent response per_method must contain method and explanation strings")
+    if [item["method"] for item in per_method] != methods:
+        raise ValueError("SDLC agent response methods do not match the computed ranking")
+    risks = result.get("risks")
+    if not isinstance(risks, list) or any(not isinstance(risk, str) for risk in risks):
+        raise ValueError("SDLC agent response risks must be a list of strings")
+    return {"summary": result["summary"], "per_method": per_method, "risks": risks}
+
+
 def sdlc_selection_node(state: PipelineState) -> PipelineState:
     if not settings.PHASE3_ENABLED:
         raise RuntimeError("Set PHASE3_ENABLED=true to run the Phase 3 SDLC engine")
@@ -37,6 +58,35 @@ def sdlc_selection_node(state: PipelineState) -> PipelineState:
         scoring_state = {**state, "classified_requirements": state.get("final_approved_requirements", [])}
     result, factors = score_project(scoring_state)
     ranked = result["ranked_scores"]
+    methods = [row["model"] for row in ranked]
+    agent_analysis = None
+    if settings.SDLC_AGENT_ENABLED and not settings.STUB_MODE:
+        requirements = scoring_state.get("classified_requirements") or scoring_state.get("extracted_requirements", [])
+        agent_ranking = [
+            {"method": row["model"], "percentage": float(row["score_percent"])}
+            for row in ranked
+        ]
+        try:
+            raw_analysis = call_sdlc_agent(
+                requirements=requirements,
+                ranking=agent_ranking,
+                project_summary=str(scoring_state.get("initial_description") or ""),
+            )
+            agent_analysis = _validate_agent_analysis(raw_analysis, methods)
+            state.setdefault("audit_events", []).append({
+                "agent": "sdlc_selection",
+                "event": "sdlc_agent_analysis",
+                "methods_explained": len(methods),
+            })
+        except Exception as exc:
+            state.setdefault("audit_events", []).append({
+                "agent": "sdlc_selection",
+                "event": "sdlc_agent_error",
+                "error": str(exc)[:500],
+            })
+    state["sdlc_agent_analysis"] = agent_analysis
+    if agent_analysis is not None:
+        result["agent_analysis"] = agent_analysis
     narration = _deterministic_narration(ranked, factors)
     narration_source = "deterministic_template"
     if settings.PHASE3_NARRATION_ENABLED and not settings.STUB_MODE:

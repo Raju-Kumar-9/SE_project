@@ -35,6 +35,24 @@ export default function ApprovalDashboard({ sessionId, pipelineResult }) {
             ))}
           </ol>
           <p>{recommendation.narration}</p>
+          {recommendation.agent_analysis && (
+            <div className="sdlc-agent-analysis">
+              <h3>SDLC analysis</h3>
+              <p>{recommendation.agent_analysis.summary}</p>
+              {(recommendation.agent_analysis.per_method ?? []).map((item) => (
+                <div key={item.method}>
+                  <strong>{item.method}</strong>
+                  <p>{item.explanation}</p>
+                </div>
+              ))}
+              {recommendation.agent_analysis.risks?.length > 0 && (
+                <>
+                  <strong>Risks and trade-offs</strong>
+                  <ul>{recommendation.agent_analysis.risks.map((risk, index) => <li key={index}>{risk}</li>)}</ul>
+                </>
+              )}
+            </div>
+          )}
           <details>
             <summary>Scoring factors and evidence</summary>
             <ul>{Object.entries(recommendation.factors_used ?? {}).map(([key, factor]) => (

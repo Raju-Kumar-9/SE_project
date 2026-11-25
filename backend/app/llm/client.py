@@ -67,6 +67,60 @@ def _call_colab_endpoint(system: str, user: str, max_tokens: int) -> dict:
         ) from exc
 
 
+def call_sdlc_agent(
+    requirements: list[dict],
+    ranking: list[dict[str, str | float]],
+    project_summary: str = "",
+) -> dict:
+    """Ask the Colab-hosted open model to explain, but not alter, SDLC scores."""
+    if settings.LLM_PROVIDER.strip().lower() != "local_finetuned":
+        raise RuntimeError("SDLC agent requires LLM_PROVIDER=local_finetuned.")
+    if not settings.HF_COLAB_ENDPOINT_URL:
+        raise RuntimeError("HF_COLAB_ENDPOINT_URL is not set. Set it in backend/.env.")
+    payload = {
+        "requirements": requirements,
+        "ranking": ranking,
+        "project_summary": project_summary,
+    }
+    try:
+        response = httpx.post(
+            f"{settings.HF_COLAB_ENDPOINT_URL.rstrip('/')}/sdlc",
+            json=payload,
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=180,
+        )
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"Colab SDLC endpoint returned HTTP {exc.response.status_code}: {exc.response.text[:300]}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise RuntimeError(f"Could not reach Colab SDLC endpoint: {exc}") from exc
+
+    result = response.json()
+    expected_methods = [item.get("method") for item in ranking]
+    if not isinstance(result, dict):
+        raise ValueError("Colab SDLC response must be a JSON object.")
+    if not isinstance(result.get("summary"), str) or not result["summary"].strip():
+        raise ValueError("Colab SDLC response summary must be a non-empty string.")
+    per_method = result.get("per_method")
+    if not isinstance(per_method, list) or any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("method"), str)
+        or not isinstance(item.get("explanation"), str)
+        or not item["method"].strip()
+        or not item["explanation"].strip()
+        for item in per_method
+    ):
+        raise ValueError("Colab SDLC response per_method must contain method and explanation strings.")
+    if [item["method"] for item in per_method] != expected_methods:
+        raise ValueError("Colab SDLC response methods must match the supplied ranking in order.")
+    risks = result.get("risks")
+    if not isinstance(risks, list) or any(not isinstance(item, str) for item in risks):
+        raise ValueError("Colab SDLC response risks must be a list of strings.")
+    return {"summary": result["summary"], "per_method": per_method, "risks": risks}
+
+
 def _call_ollama(system: str, user: str, max_tokens: int) -> dict:
     url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
     payload = {
